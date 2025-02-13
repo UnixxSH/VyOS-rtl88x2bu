@@ -1,0 +1,44 @@
+name: Build rtl88x2bu kernel module for vyos
+
+on: 
+  workflow_dispatch:
+    inputs:
+      kernel_version:
+        required: true
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: get the code
+        uses: actions/checkout@v4
+
+      # as Ubuntu 22.04 doesn't include the latest podman version (particularly with the --output param for build command), install the unstable version
+      - name: install podman
+        uses: gacts/install-podman@v1
+
+      - name: debug - where we are
+        run: pwd
+
+      - name: build the image
+        run: podman build -t vyos-rtl88x2bu .
+        working-directory: ./
+
+      - name: run the image
+        run: podman run --name vyos-rtl88x2bu -d localhost/vyos-rtl88x2bu:latest
+
+      - name: build module
+        run: podman exec $(podman container ls -q) bash -c "./build.sh"
+
+      - name: get what we get (yes)
+        run: podman cp "vyos-rtl88x2bu:/var/lib/dkms/rtl88x2bu/5.8.7.1/tarball/dkms_main_tree/${{ github.event.inputs.kernel_version }}-amd64-vyos/x86_64/module/88x2bu.ko" .
+
+      - name: debug - what we get
+        run: find . -iname "*.ko"
+
+      - name: upload as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 88x2bu_${{ github.event.inputs.kernel_version }}-amd64-vyos
+          path: 88x2bu.ko
